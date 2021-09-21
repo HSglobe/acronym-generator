@@ -1,0 +1,51 @@
+name: Blank snippet
+description: Create a new snippet from a blank template.
+host: WORD
+api_set: {}
+script:
+  content: "$(\"#run\").click(() => tryCatch(run));\r\nvar tbodyRef = document.getElementById(\"table\").getElementsByTagName(\"tbody\")[0];\r\n\r\nclass Row {\r\n  regArr?: string[];\r\n  shortCode?: string[];\r\n  description?: string;\r\n  reference?: number[];\r\n  remarks?: string[];\r\n}\r\n\r\nclass SingleRow {\r\n  shortCode: string;\r\n  wordsArr: string[];\r\n  description?: string[];\r\n  remark?: string;\r\n}\r\n\r\nvar rows: Row[] = [];\r\n\r\nvar rangeColl: Word.RangeCollection[] = [];\r\nvar tableRow: SingleRow[] = [];\r\n\r\nasync function run() {\r\n  await Word.run(async (context) => {\r\n    if (Office.context.requirements.isSetSupported(\"WordApi\", \"1.1\")) {\r\n      $(\"#supportedVersion\").html(\"This code is using Word 2016 or later.\");\r\n      var document = context.document;\r\n      var para = document.body.paragraphs;\r\n\r\n      context.load(para);\r\n\r\n      context.sync().then(() => {\r\n        if (para.items.length > 0) {\r\n          para.items.forEach((e) => {\r\n            e.text.length > 0 ? rows.push({ description: e.text }) : null;\r\n          });\r\n          //for each row check if it contain ( bracket. if it does store it in regArr\r\n          rows.forEach((r, id) => {\r\n            let count = r.description.match(/\\(.*?\\)/g);\r\n            if (count) {\r\n              rows[id].regArr = count;\r\n            }\r\n          });\r\n          //filter out rows which has ( bracket rest remove other rows as they don;t contain any abbr.\r\n          rows = rows.filter((e) => {\r\n            return e.regArr;\r\n          });\r\n\r\n          // console.log(rows);\r\n\r\n          //next from the list of regArr remove those which are more than 8 character long\r\n          rows.forEach((item, idx) => {\r\n            rows[idx].regArr = item.regArr.filter((f) => {\r\n              return f.length < 8 && f.length > 3;\r\n            });\r\n          });\r\n\r\n          let key: string;\r\n\r\n          rows.forEach((item, idx) => {\r\n            item.regArr.forEach((arg, i) => {\r\n              let words = item.description.indexOf(arg);\r\n              let str = item.description.substr(0, words);\r\n              let arr = str.split(\" \");\r\n              key = arg.slice(1, arg.length - 1);\r\n              //console.log(key, arr);\r\n              tableRow.push({\r\n                shortCode: key,\r\n                wordsArr: arr\r\n              });\r\n              // console.log(idx,words,arg)\r\n            });\r\n          });\r\n          //till here we got shortCode and array of description matching short code.\r\n\r\n          tableRow.forEach((row, idx) => {\r\n            if (ofExist(row.wordsArr, row.shortCode)) {\r\n              let startIdx = row.wordsArr.length - row.shortCode.length - 2;\r\n              let endIdx = row.wordsArr.length - 1;\r\n              tableRow[idx].description = tableRow[idx].wordsArr.slice(startIdx, endIdx);\r\n              tableRow[idx].remark = \"pls cross check\";\r\n              //console.log(\"of exist\", row);\r\n            } else {\r\n              //generate description for all other use case\r\n              let startIdx = row.wordsArr.length - row.shortCode.length - 1;\r\n              let endIdx = row.wordsArr.length - 1;\r\n              tableRow[idx].description = tableRow[idx].wordsArr.slice(startIdx, endIdx);\r\n              //console.log(row);\r\n              tableRow[idx].remark = \"\";\r\n            }\r\n          });\r\n\r\n          //check for hypen\r\n          tableRow.forEach((row, idx) => {\r\n            console.log(row);\r\n            if (row.description.indexOf(\"-\") !== -1) {\r\n              console.log(\"has hypen\", row);\r\n              tableRow[idx].remark = \"has hypen..do check again\";\r\n            }\r\n          });\r\n\r\n          makeTable();\r\n        } else {\r\n          return;\r\n        }\r\n      });\r\n    } else {\r\n      // Just letting you know that this code will not work with your version of Word.\r\n      $(\"#supportedVersion\").html(\"This code requires Word 2016 or later.\");\r\n    }\r\n  });\r\n}\r\n\r\nconst takeRight = (arr, n = 1) => arr.slice(arr.length - n, arr.length);\r\n\r\nconst ofExist = (arr: string[], key: string) => {\r\n  //check if of exists in the arr without o existing in key\r\n  if (key.toLowerCase().indexOf(\"o\") == -1) {\r\n    //o doesn't exist in key. check if of exist in arr;\r\n    let start: number = arr.length - key.length - 1;\r\n    let end: number = arr.length;\r\n    //check if in the given range of exists\r\n    let slicearr = arr.slice(start, end);\r\n    if (slicearr.indexOf(\"of\") !== -1) {\r\n      //of found in the slicearr\r\n      return true;\r\n    } else {\r\n      //of not found in the array, procced as normal abbr;\r\n      return false;\r\n    }\r\n  } else {\r\n    return false;\r\n  }\r\n};\r\n\r\nfunction makeTable() {\r\n  if (tableRow.length > 0) {\r\n    tableRow.forEach((ele) => {\r\n      let newRow = tbodyRef.insertRow(tbodyRef.rows.length);\r\n      newRow.innerHTML = `<tr><td>${ele.shortCode}</td><td>${ele.description.join(\" \")}</td><td>${ele.remark}</td><tr>`;\r\n    });\r\n  } else {\r\n    $(\"#supportedVersion\").html(\"unable to create table for abbrevation\");\r\n  }\r\n}\r\n\r\nfunction insertEmersonQuoteAtSelection() {\r\n  Word.run(function(context) {\r\n    // Create a proxy object for the document.\r\n    var thisDocument = context.document;\r\n\r\n    // Queue a command to get the current selection.\r\n    // Create a proxy range object for the selection.\r\n    var range = thisDocument.getSelection();\r\n\r\n    // Queue a command to replace the selected text.\r\n    range.insertText('\"Hitch your wagon to a star.\"\\n', Word.InsertLocation.replace);\r\n\r\n    // Synchronize the document state by executing the queued commands,\r\n    // and return a promise to indicate task completion.\r\n    return context.sync().then(function() {\r\n      console.log(\"Added a quote from Ralph Waldo Emerson.\");\r\n    });\r\n  }).catch(function(error) {\r\n    console.log(\"Error: \" + JSON.stringify(error));\r\n    if (error instanceof OfficeExtension.Error) {\r\n      console.log(\"Debug info: \" + JSON.stringify(error.debugInfo));\r\n    }\r\n  });\r\n}\r\n\r\n/** Default helper for invoking an action and handling errors. */\r\nasync function tryCatch(callback) {\r\n  try {\r\n    await callback();\r\n  } catch (error) {\r\n    // Note: In a production add-in, you'd want to notify the user through your add-in's UI.\r\n    console.error(error);\r\n  }\r\n}\r\n"
+  language: typescript
+template:
+  content: "<button id=\"run\" class=\"ms-Button\">\n    <span class=\"ms-Button-label\">Run</span>\n</button>\n\n<body>\n\t<div id=\"content-header\">\n\t\t<div class=\"padding\">\n\t\t\t<h1>Welcome</h1>\n\t\t</div>\n\t</div>\n\t<div id=\"content-main\">\n\t\t<table id=\"table\">\n\t\t\t<thead>\n\t\t\t\t<th>Abbr Code</th>\n\t\t\t\t<th>Abbr Description</th>\n\t\t\t\t<th>Remarks</th>\n\t\t\t</thead>\n\t\t\t<tbody>\n\t\t\t\t<tr></tr>\n\t\t\t\t<tr></tr>\n\t\t\t\t<tr></tr>\n\t\t\t</tbody>\n\t\t</table>\n\t</div>\n\t<br />\n\t<div id=\"supportedVersion\" />\n\n</body>"
+  language: html
+style:
+  content: |-
+    section.samples {
+        margin-top: 20px;
+    }
+    section.samples .ms-Button, section.setup .ms-Button {
+        display: block;
+        margin-bottom: 5px;
+        margin-left: 20px;
+        min-width: 80px;
+    }
+    #table {
+      font-family: Arial, Helvetica, sans-serif;
+      border-collapse: collapse;
+      width: 100%;
+    }
+    #table td, #table th {
+      border: 1px solid #ddd;
+      padding: 8px;
+    }
+    #table tr:nth-child(even){background-color: #f2f2f2;}
+    #table tr:hover {background-color: #ddd;}
+    #table th {
+      padding-top: 12px;
+      padding-bottom: 12px;
+      text-align: left;
+      background-color: #04AA6D;
+      color: white;
+    }
+  language: css
+libraries: |
+  https://appsforoffice.microsoft.com/lib/1/hosted/office.js
+  @types/office-js
+  office-ui-fabric-js@1.4.0/dist/css/fabric.min.css
+  office-ui-fabric-js@1.4.0/dist/css/fabric.components.min.css
+  core-js@2.4.1/client/core.min.js
+  @types/core-js
+  jquery@3.1.1
+  @types/jquery@3.3.1
+@HSglobe
+ 
